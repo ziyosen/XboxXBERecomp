@@ -1,0 +1,45 @@
+# Compile smoke test: cross-compiles the SDK runtime with the NDK for armeabi-v7a.
+# No game file needed: it builds the runtime translation units only, to catch 32-bit breakage.
+name: armv7-smoke
+
+on:
+  push:
+    branches: [armv7]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r28b-linux.zip
+          unzip -q android-ndk-r28b-linux.zip
+          echo "NDK=$PWD/android-ndk-r28b" >> "$GITHUB_ENV"
+
+      - name: Compile runtime (armeabi-v7a)
+        run: |
+          CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
+          CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++
+          FAIL=0
+          for f in runtime/kernel/*.cpp runtime/core/log.cpp; do
+            case "$f" in *memory32.cpp) continue;; esac
+            if "$CXX" -fsyntax-only -std=c++20 -Iruntime -DANDROID "$f"; then
+              echo "OK   $f"
+            else
+              echo "FAIL $f"; FAIL=1
+            fi
+          done
+          exit $FAIL
+
+      - name: Verify 32-bit scheme selected
+        run: |
+          CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++
+          echo '#include "kernel/memory.h"
+          #include <cstdio>
+          static_assert(MEM_32BIT == 1, "32-bit scheme must be selected on ARMv7");
+          int main() { printf("WC=%08X SYS=%08X STACK=%08X\n", kWriteCombineBase, kSystemBase, kStackBase); }' > /tmp/chk.cpp
+          "$CXX" -std=c++20 -Iruntime -DANDROID /tmp/chk.cpp -o /tmp/chk && /tmp/chk 2>/dev/null ||             "$NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm /tmp/chk | head -1
