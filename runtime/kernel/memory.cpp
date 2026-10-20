@@ -16,6 +16,22 @@
 #include <windows.h>
 #else
 #include <sys/mman.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+// memfd_create needs API 29 declarations on Bionic; call the syscall directly so any
+// toolchain/API combination compiles (Linux arm: 385, aarch64: 279, x86_64: 319)
+static int MemfdCreate(const char* name, unsigned int flags) {
+#ifdef SYS_memfd_create
+    return static_cast<int>(syscall(SYS_memfd_create, name, flags));
+#elif defined(__arm__)
+    return static_cast<int>(syscall(385, name, flags));
+#elif defined(__aarch64__)
+    return static_cast<int>(syscall(279, name, flags));
+#else
+    return static_cast<int>(syscall(319, name, flags));
+#endif
+}
+#define memfd_create MemfdCreate
 #endif
 
 namespace mem {
