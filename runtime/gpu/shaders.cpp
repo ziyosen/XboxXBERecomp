@@ -556,10 +556,29 @@ std::string ShaderHooks::Output() const { return "outc.rgb = saturate(outc.rgb);
 uint64_t Hash(const void* p, size_t n, uint64_t h) {
     // 16 bytes a step through a 64 x 64 -> 128 bit multiply: it runs over textures every frame and keys every draw
     constexpr uint64_t k0 = 0x9E3779B97F4A7C15ull, k1 = 0xE7037ED1A0B428DBull;
+#if defined(__SIZEOF_INT128__)
     auto mix = [](uint64_t a, uint64_t b) {
         unsigned __int128 r = static_cast<unsigned __int128>(a) * b;
         return uint64_t(r) ^ uint64_t(r >> 64);
     };
+#else
+    // ARMv7: no __int128 — 64x64 -> 128 multiply via 32-bit limbs, bit-identical
+    auto mix = [](uint64_t a, uint64_t b) {
+        uint32_t a0 = uint32_t(a), a1 = uint32_t(a >> 32);
+        uint32_t b0 = uint32_t(b), b1 = uint32_t(b >> 32);
+        uint64_t p00 = uint64_t(a0) * b0;
+        uint64_t p01 = uint64_t(a0) * b1;
+        uint64_t p10 = uint64_t(a1) * b0;
+        uint64_t p11 = uint64_t(a1) * b1;
+        uint64_t mid = p10 + (p00 >> 32);
+        uint64_t carry = mid < p10 ? 1ull : 0ull;   // carry out of mid
+        uint64_t mid2 = mid + p01;
+        carry += mid2 < mid ? 1ull : 0ull;          // carry out of mid2 (bit 64)
+        uint64_t lo = (p00 & 0xFFFFFFFFull) | ((mid2 & 0xFFFFFFFFull) << 32);
+        uint64_t hi = p11 + (mid2 >> 32) + (carry << 32);
+        return lo ^ hi;
+    };
+#endif
     const uint8_t* b = static_cast<const uint8_t*>(p);
     uint64_t seed = h ^ k0;
     size_t i = 0;

@@ -71,7 +71,8 @@ inline int ws_select(int, ws_fd_set* r, ws_fd_set* w, ws_fd_set* e, timeval* tv)
 #define select ws_select
 inline int getsockname(SOCKET s, sockaddr* a, int* l) { socklen_t n = socklen_t(*l); int r = ::getsockname(s, a, &n); *l = int(n); return r; }
 inline int getpeername(SOCKET s, sockaddr* a, int* l) { socklen_t n = socklen_t(*l); int r = ::getpeername(s, a, &n); *l = int(n); return r; }
-inline ssize_t recvfrom(SOCKET s, char* b, int len, int f, sockaddr* a, int* l) { socklen_t n = socklen_t(*l); ssize_t r = ::recvfrom(s, b, size_t(len), f, a, &n); *l = int(n); return r; }
+inline ssize_t ws_recvfrom(SOCKET s, char* b, int len, int f, sockaddr* a, int* l) { socklen_t n = socklen_t(*l); ssize_t r = (::recvfrom)(s, b, size_t(len), f, a, &n); if (l) *l = int(n); return r; }
+#define recvfrom ws_recvfrom
 inline SOCKET accept(SOCKET s, sockaddr* a, int* l) { socklen_t n = l ? socklen_t(*l) : 0; SOCKET r = ::accept(s, a, l ? &n : nullptr); if (l) *l = int(n); return r; }
 // Winsock option numbers to POSIX
 inline void ws_opt(int& level, int& opt) {
