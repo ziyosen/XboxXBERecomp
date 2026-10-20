@@ -143,7 +143,13 @@ KERNEL_EXPORT(283, RtlExtendedMagicDivide, 5) {
     int64_t n = int64_t(uint64_t(a[0]) | uint64_t(a[1]) << 32);
     uint64_t m = uint64_t(a[2]) | uint64_t(a[3]) << 32;
     uint64_t u = n < 0 ? 0 - uint64_t(n) : uint64_t(n);
-    uint64_t q = uint64_t((unsigned __int128)u * m >> 64) >> (a[4] & 0xFF);
+    // portable high-64-of-product: ARMv7 has no __int128 (verified against __int128 on x86)
+    uint64_t u_lo = u & 0xFFFFFFFFull, u_hi = u >> 32;
+    uint64_t m_lo = m & 0xFFFFFFFFull, m_hi = m >> 32;
+    uint64_t p00 = u_lo * m_lo, p01 = u_lo * m_hi, p10 = u_hi * m_lo, p11 = u_hi * m_hi;
+    uint64_t mid = (p00 >> 32) + (p01 & 0xFFFFFFFFull) + (p10 & 0xFFFFFFFFull);
+    uint64_t prod_hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32);
+    uint64_t q = prod_hi >> (a[4] & 0xFF);
     if (n < 0) q = 0 - q;
     ctx.edx = uint32_t(q >> 32);
     return uint32_t(q);

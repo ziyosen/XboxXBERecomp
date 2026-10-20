@@ -1,3 +1,5 @@
+// for memfd_create on 32-bit Linux/Android
+#define _GNU_SOURCE
 #include "kernel/memory.h"
 
 #include <algorithm>
