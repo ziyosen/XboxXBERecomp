@@ -22,8 +22,8 @@ jobs:
 
       - name: Compile runtime (armeabi-v7a)
         run: |
-          CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
-          CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++
+          CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi29-clang
+          CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi29-clang++
           FAIL=0
           for f in runtime/kernel/*.cpp runtime/core/log.cpp; do
             case "$f" in *memory32.cpp) continue;; esac
@@ -37,7 +37,7 @@ jobs:
 
       - name: Verify 32-bit scheme selected
         run: |
-          CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++
+          CXX=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi29-clang++
           echo '#include "kernel/memory.h"
           #include <cstdio>
           static_assert(MEM_32BIT == 1, "32-bit scheme must be selected on ARMv7");
