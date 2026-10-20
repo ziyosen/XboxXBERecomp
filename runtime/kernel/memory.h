@@ -15,7 +15,7 @@ constexpr uint32_t kStackBase = 0x8C000000;
 constexpr uint32_t kStackSize = 0x04000000;
 #else
 #define MEM_32BIT 0
-constexpr uint32_t kGuestSpan = 1ull << 32;
+constexpr uint64_t kGuestSpan = 1ull << 32;
 constexpr uint32_t kUserHigh = 0x7FFE0000;
 constexpr uint32_t kWriteCombineBase = 0xF0000000;
 constexpr uint32_t kSystemBase = 0xB0000000;       // pool, system memory, thread blocks
