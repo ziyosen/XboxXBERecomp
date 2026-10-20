@@ -3,18 +3,32 @@
 
 namespace mem {
 
-constexpr uint32_t kPage = 0x1000;
-constexpr uint32_t kUserLow = 0x00010000;
+#if defined(__arm__) || defined(MEM_32BIT)
+#define MEM_32BIT 1
+constexpr uint32_t kGuestSpan = 0x90000000;  // guest 0 .. span lives in the single window
+// 32-bit host layout: regions above 0x80000000 relocated below it (see memory.cpp).
+constexpr uint32_t kUserHigh = 0x7C000000;
+constexpr uint32_t kWriteCombineBase = 0x7C000000;
+constexpr uint32_t kSystemBase = 0x84000000;
+constexpr uint32_t kSystemSize = 0x08000000;
+constexpr uint32_t kStackBase = 0x8C000000;
+constexpr uint32_t kStackSize = 0x04000000;
+#else
+#define MEM_32BIT 0
+constexpr uint32_t kGuestSpan = 1ull << 32;
 constexpr uint32_t kUserHigh = 0x7FFE0000;
-constexpr uint32_t kContiguousBase = 0x80000000;  // guest VA = kContiguousBase | physical
-constexpr uint32_t kPhysicalSize = 64u << 20;
 constexpr uint32_t kWriteCombineBase = 0xF0000000;
-constexpr uint32_t kKernelDataBase = 0x80000000;   // first physical megabyte holds kernel variables
-constexpr uint32_t kKernelDataSize = 0x00100000;
 constexpr uint32_t kSystemBase = 0xB0000000;       // pool, system memory, thread blocks
 constexpr uint32_t kSystemSize = 0x10000000;
 constexpr uint32_t kStackBase = 0xD0000000;
 constexpr uint32_t kStackSize = 0x10000000;
+#endif
+constexpr uint32_t kPage = 0x1000;
+constexpr uint32_t kUserLow = 0x00010000;
+constexpr uint32_t kContiguousBase = 0x80000000;  // guest VA = kContiguousBase | physical
+constexpr uint32_t kPhysicalSize = 64u << 20;
+constexpr uint32_t kKernelDataBase = 0x80000000;   // first physical megabyte holds kernel variables
+constexpr uint32_t kKernelDataSize = 0x00100000;
 
 // NT allocation flags
 constexpr uint32_t kMemCommit = 0x1000, kMemReserve = 0x2000, kMemDecommit = 0x4000, kMemRelease = 0x8000,
@@ -22,6 +36,7 @@ constexpr uint32_t kMemCommit = 0x1000, kMemReserve = 0x2000, kMemDecommit = 0x4
 
 bool Init();
 uint8_t* Base();
+uint8_t* HostPtrFor(uint32_t va);  // window-aware host pointer for a guest address
 bool Commit(uint32_t va, uint32_t size);
 void Decommit(uint32_t va, uint32_t size);
 bool IsCommitted(uint32_t va);

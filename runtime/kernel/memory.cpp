@@ -22,6 +22,14 @@ static std::recursive_mutex g_lock;
 
 uint8_t* Base() { return g_base; }
 
+// 32-bit host (ARMv7): a single 2.125 GB low window replaces the flat 4 GB reservation.
+// Regions above 0x80000000 (WC / system / stacks) are relocated below it — the kernel is
+// ours, so the shift is invisible to the game (it only learns addresses from our APIs;
+// only the image base 0x10000 and kernel data 0x80000000 are embedded in recompiled code,
+// and both are kept). All guest addresses stay < 0x90000000, so `base + va` in generated
+// code (x86_ops.h) never wraps on a 32-bit host.
+static inline uint8_t* HostOf(uint32_t va) { return g_base + va; }
+
 // physical memory shows at 0x80000000 and again at 0xF0000000 (write combined view)
 static bool InPhysical(uint32_t va) {
     return (va >= kContiguousBase && va < kContiguousBase + kPhysicalSize) ||
@@ -29,6 +37,29 @@ static bool InPhysical(uint32_t va) {
 }
 
 bool Init() {
+#if MEM_32BIT
+    // 32-bit host: one 2.125 GB NORESERVE window covering the whole 32-bit guest span
+    {
+        for (uint32_t hint : {0x10000000u, 0x20000000u, 0x08000000u, 0u}) {
+            void* p = mmap(reinterpret_cast<void*>(uintptr_t(hint)), kGuestSpan, PROT_NONE,
+                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+            if (p != MAP_FAILED) { g_base = static_cast<uint8_t*>(p); break; }
+        }
+        if (!g_base) {
+            LOGE("memory: 32-bit window reservation failed");
+            return false;
+        }
+        int fd = memfd_create("ram", 0);
+        if (fd < 0 || ftruncate(fd, kPhysicalSize) ||
+            mmap(g_base + kContiguousBase, kPhysicalSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED ||
+            mmap(g_base + kWriteCombineBase, kPhysicalSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED) {
+            LOGE("memory: physical window mapping failed");
+            return false;
+        }
+        LOGI("memory: 32-bit guest window at %p (2.125 GB, WC at %08X)", (void*)g_base, kWriteCombineBase);
+        return true;
+    }
+#endif
     const uint64_t size = 1ull << 32;
 #ifdef _WIN32
     HANDLE ram = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, kPhysicalSize, nullptr);
@@ -80,12 +111,12 @@ bool Commit(uint32_t va, uint32_t size) {
     uint64_t end = (uint64_t(va) + size + kPage - 1) & ~uint64_t(kPage - 1);
     std::lock_guard<std::recursive_mutex> lock(g_lock);
 #ifdef _WIN32
-    if (!VirtualAlloc(g_base + first, size_t(end - first), MEM_COMMIT, PAGE_READWRITE)) {
+    if (!VirtualAlloc(HostOf(first), size_t(end - first), MEM_COMMIT, PAGE_READWRITE)) {
         LOGE("memory: commit %08X+%X failed", first, uint32_t(end - first));
         return false;
     }
 #else
-    if (mprotect(g_base + first, size_t(end - first), PROT_READ | PROT_WRITE)) {
+    if (mprotect(HostOf(first), size_t(end - first), PROT_READ | PROT_WRITE)) {
         LOGE("memory: commit %08X+%X failed", first, uint32_t(end - first));
         return false;
     }
@@ -100,10 +131,10 @@ void Decommit(uint32_t va, uint32_t size) {
     uint64_t end = (uint64_t(va) + size + kPage - 1) & ~uint64_t(kPage - 1);
     std::lock_guard<std::recursive_mutex> lock(g_lock);
 #ifdef _WIN32
-    VirtualFree(g_base + first, size_t(end - first), MEM_DECOMMIT);
+    VirtualFree(HostOf(first), size_t(end - first), MEM_DECOMMIT);
 #else
-    madvise(g_base + first, size_t(end - first), MADV_DONTNEED);
-    mprotect(g_base + first, size_t(end - first), PROT_NONE);
+    madvise(HostOf(first), size_t(end - first), MADV_DONTNEED);
+    mprotect(HostOf(first), size_t(end - first), PROT_NONE);
 #endif
     for (uint64_t p = first; p < end; p += kPage) g_committed[size_t(p >> 12)] = 0;
 }
@@ -356,7 +387,7 @@ uint32_t AllocContiguous(uint32_t size, uint32_t lowest, uint32_t highest, uint3
         return 0;
     }
     Commit(a, size);
-    std::memset(g_base + a, 0, size);
+    std::memset(HostOf(a), 0, size);
     return a;
 }
 
@@ -374,7 +405,7 @@ uint32_t AllocSystem(uint32_t size, uint32_t align) {
     uint32_t a = g_system.Alloc(size, std::max<uint32_t>(align, 16), kSystemBase, kSystemBase + kSystemSize - 1, false);
     if (!a) return 0;
     Commit(a, size);
-    std::memset(g_base + a, 0, size);
+    std::memset(HostOf(a), 0, size);
     return a;
 }
 

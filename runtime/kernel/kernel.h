@@ -57,27 +57,27 @@ extern uint8_t* g_base;
 
 template <typename T>
 inline T& G(uint32_t va) {
-    return *reinterpret_cast<T*>(g_base + va);
+    return *reinterpret_cast<T*>(mem::HostPtrFor(va));
 }
 inline uint32_t R32(uint32_t va) {
     uint32_t v;
-    std::memcpy(&v, g_base + va, 4);
+    std::memcpy(&v, mem::HostPtrFor(va), 4);
     return v;
 }
-inline void W32(uint32_t va, uint32_t v) { std::memcpy(g_base + va, &v, 4); }
+inline void W32(uint32_t va, uint32_t v) { std::memcpy(mem::HostPtrFor(va), &v, 4); }
 inline uint16_t R16(uint32_t va) {
     uint16_t v;
-    std::memcpy(&v, g_base + va, 2);
+    std::memcpy(&v, mem::HostPtrFor(va), 2);
     return v;
 }
-inline void W16(uint32_t va, uint16_t v) { std::memcpy(g_base + va, &v, 2); }
+inline void W16(uint32_t va, uint16_t v) { std::memcpy(mem::HostPtrFor(va), &v, 2); }
 inline uint64_t R64(uint32_t va) {
     uint64_t v;
-    std::memcpy(&v, g_base + va, 8);
+    std::memcpy(&v, mem::HostPtrFor(va), 8);
     return v;
 }
-inline void W64(uint32_t va, uint64_t v) { std::memcpy(g_base + va, &v, 8); }
-inline void* HostPtr(uint32_t va) { return g_base + va; }
+inline void W64(uint32_t va, uint64_t v) { std::memcpy(mem::HostPtrFor(va), &v, 8); }
+inline void* HostPtr(uint32_t va) { return mem::HostPtrFor(va); }
 
 // ANSI_STRING / OBJECT_STRING: USHORT Length, USHORT MaximumLength, PCHAR Buffer
 std::string ReadAnsiString(uint32_t str);
